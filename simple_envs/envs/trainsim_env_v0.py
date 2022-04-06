@@ -7,10 +7,10 @@ from gym import spaces
 
 class TrainSimEnv(gym.Env):
     metadata = {'render.modes': ['console']}
+    rewards = {'tiny': 0.1, 'small': 1, 'medium': 5, 'big': 10}
 
     def __init__(self):
-        super(TrainSimEnv, self).__init__()
-
+        """
         # Action space
         # the following actions can be taken:
         # 0: wait/do nothing
@@ -18,9 +18,8 @@ class TrainSimEnv(gym.Env):
         # 2: put passenger
         # 3: move left (lower numbers)
         # 4: move right (higher numbers)
-        self.action_space = spaces.Discrete(5)
 
-        # Observation space
+         # Observation space
         # stations:
         # (1) - (2) - (3) - (4) - (5)
         # each station can have one of the following states:
@@ -37,6 +36,11 @@ class TrainSimEnv(gym.Env):
         # train can have the following states:
         # --> see station states
         #
+        """
+        super(TrainSimEnv, self).__init__()
+
+        self.action_space = spaces.Discrete(5)
+
         self.number_of_stations = 5
         train_states = 6
         station_states = 6
@@ -52,12 +56,6 @@ class TrainSimEnv(gym.Env):
 
         self.state = [0, 0, 0, 0, 0, 0, 0]
 
-        # rewards
-        self.reward = 0
-        self.small_reward = 1
-        self.avg_reward = 5
-        self.big_reward = 10
-
         # timestep counter
         self.time = 0
         self.max_time = 1000
@@ -65,6 +63,7 @@ class TrainSimEnv(gym.Env):
         # passenger occurs randomly after n timesteps
         self.max_time_passenger = 10
         self.time_until_next_passenger = 0  # starts with a passenger waiting
+        self.max_passengers = 50
 
         # for console output
         self.overall_passengers = 0
@@ -74,6 +73,7 @@ class TrainSimEnv(gym.Env):
 
     def step(self, action):
         self.reward = 0
+        self.done = False
 
         # logic for creating new passenger
         if self.time_until_next_passenger == 0:
@@ -84,7 +84,7 @@ class TrainSimEnv(gym.Env):
             # if there already is a passenger, then this passenger has abandoned waiting
             # this results in a small loss (unhappy passenger)
             if self.state[station + 1] > 0:
-                self.reward = self.reward - self.avg_reward
+                #self.reward = self.reward - self.rewards['medium']
                 self.skipped_waiting = self.skipped_waiting + 1
             self.state[station + 1] = destination
             self.time_until_next_passenger = self.max_time_passenger
@@ -100,46 +100,53 @@ class TrainSimEnv(gym.Env):
             pass
         elif action == int(Actions.get):
             if station_state == 0:
-                self.reward = self.reward - self.small_reward
+                #self.reward = self.reward - self.rewards['small']
+                pass
             else:
                 if current_state == 0:
                     self.state[1] = station_state
                     self.state[current_position + 1] = 0
-                    self.reward = self.reward + self.avg_reward
+                    #self.reward = self.reward + self.rewards['medium']
                 else:
-                    self.reward = self.reward - self.small_reward
+                    #self.reward = self.reward - self.rewards['small']
+                    pass
         elif action == int(Actions.put):
             if current_state == 0:
-                self.reward = self.reward - self.small_reward
+                #self.reward = self.reward - self.rewards['small']
+                pass
             else:
                 self.state[1] = 0
                 if current_position == current_state:
-                    self.reward = self.reward + self.big_reward
+                    self.reward = self.reward + self.rewards['big']
                     self.to_correct_station = self.to_correct_station + 1
                 else:
-                    self.reward = self.reward - self.avg_reward
+                    #self.reward = self.reward - self.rewards['medium']
                     self.to_wrong_station = self.to_wrong_station + 1
+                    self.done = True
         elif action == int(Actions.left):
             if current_position > 1:
                 self.state[0] = self.state[0] - 1
                 if self.state[1] > 0:
-                    self.reward = self.reward - self.small_reward
+                    #self.reward = self.reward - self.rewards['small']
+                    pass
         elif action == int(Actions.right):
             if current_position < 5:
                 self.state[0] = self.state[0] + 1
                 if self.state[1] > 0:
-                    self.reward = self.reward - self.small_reward
+                    #self.reward = self.reward - self.rewards['small']
+                    pass
 
         # bookkeeping
         self.time = self.time + 1
+        self.reward = self.reward - self.rewards['tiny']
         if self.time > self.max_time:
-            done = True
-        else:
-            done = False
+            self.done = True
+        if self.to_wrong_station + self.to_correct_station + self.skipped_waiting == self.max_passengers:
+            self.done = True
 
         info = {}
 
-        return self.state, self.reward, done, info
+        return self.state, self.reward, self.done, info
 
     def reset(self):
         self.state = [0, 0, 0, 0, 0, 0, 0]
